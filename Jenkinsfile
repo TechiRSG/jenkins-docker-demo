@@ -1,5 +1,3 @@
-@Library('shared-lib') _
-
 pipeline {
 
     agent any
@@ -31,36 +29,64 @@ pipeline {
             }
         }
 
-         stage('Security Scan') {
-
-             steps {
-
-                  sh """
-
-                  trivy image \
-                  --exit-code 1 \
-                  --severity CRITICAL,HIGH \
-                  ${IMAGE_NAME}:${IMAGE_TAG}
-
-                   """
-                 }
-              }
-
-        stage('Docker Build and Push') {
+        stage('Build Docker Image') {
 
             steps {
 
-                script {
+                sh """
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                """
+            }
+        }
 
-                    dockerBuildPush(
+        stage('Security Scan') {
 
-                        imageName: env.IMAGE_NAME,
-                        imageTag: env.IMAGE_TAG,
-                        projectId: env.PROJECT_ID,
-                        repoName: env.REPO_NAME
+            steps {
 
-                    )
-                }
+                sh """
+
+                trivy image \
+                --exit-code 1 \
+                --severity CRITICAL,HIGH \
+                ${IMAGE_NAME}:${IMAGE_TAG}
+
+                """
+            }
+        }
+
+        stage('Docker Push') {
+
+            steps {
+
+                sh """
+
+                docker tag \
+                ${IMAGE_NAME}:${IMAGE_TAG} \
+                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                docker push \
+                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                """
+            }
+        }
+
+        stage('Deploy to GKE') {
+
+            when {
+
+                branch 'dev'
+            }
+
+            steps {
+
+                sh """
+
+                sed -i 's|IMAGE_PLACEHOLDER|us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g' k8s/deployment.yaml
+
+                kubectl apply -f k8s/
+
+                """
             }
         }
     }
