@@ -1,3 +1,5 @@
+@Library('shared-lib') _
+
 pipeline {
 
     agent any
@@ -23,77 +25,27 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    IMAGE_TAG = "build-${BUILD_NUMBER}-${SHORT_COMMIT}"
-
-                    env.IMAGE_TAG = IMAGE_TAG
-
+                    env.IMAGE_TAG =
+                        "build-${BUILD_NUMBER}-${SHORT_COMMIT}"
                 }
             }
         }
 
-        stage('Parallel Validation') {
-
-            parallel {
-
-                stage('Lint Check') {
-
-                    steps {
-
-                        sh '''
-                        echo "Running lint checks..."
-                        sleep 10
-                        echo "Lint completed"
-                        '''
-                    }
-                }
-
-                stage('Unit Tests') {
-
-                    steps {
-
-                        sh '''
-                        echo "Running unit tests..."
-                        sleep 15
-                        echo "Tests completed"
-                        '''
-                    }
-                }
-
-                stage('Security Scan') {
-
-                    steps {
-
-                        sh '''
-                        echo "Running security scan..."
-                        sleep 12
-                        echo "Security scan completed"
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
+        stage('Docker Build and Push') {
 
             steps {
 
-                sh """
-                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                """
-            }
-        }
+                script {
 
-        stage('Push Docker Image') {
+                    dockerBuildPush(
 
-            steps {
+                        imageName: env.IMAGE_NAME,
+                        imageTag: env.IMAGE_TAG,
+                        projectId: env.PROJECT_ID,
+                        repoName: env.REPO_NAME
 
-                sh """
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
-
-                docker push \
-                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
-                """
+                    )
+                }
             }
         }
     }
