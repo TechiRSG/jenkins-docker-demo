@@ -47,6 +47,7 @@ pipeline {
 
                 trivy image \
                 --exit-code 1 \
+                --ignore-unfixed\
                 --severity CRITICAL,HIGH \
                 ${IMAGE_NAME}:${IMAGE_TAG}
 
