@@ -20,7 +20,7 @@ spec:
       containers:
       - name: myapp
 
-        image: us-central1-docker.pkg.dev/poc-01-488406/my-docker-repo/myapp:v1
+        image: IMAGE_PLACEHOLDER
 
         ports:
         - containerPort: 80
