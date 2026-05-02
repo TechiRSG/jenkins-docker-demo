@@ -12,12 +12,23 @@ pipeline {
 
     stages {
 
-        stage('Branch Info') {
+        stage('Set Dynamic Tag') {
 
             steps {
 
-                echo "Branch Name: ${env.BRANCH_NAME}"
+                script {
 
+                    SHORT_COMMIT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+
+                    IMAGE_TAG = "build-${BUILD_NUMBER}-${SHORT_COMMIT}"
+
+                    env.IMAGE_TAG = IMAGE_TAG
+
+                    echo "Generated Tag: ${IMAGE_TAG}"
+                }
             }
         }
 
@@ -25,29 +36,35 @@ pipeline {
 
             steps {
 
-                sh '''
-                docker build -t myapp:${BUILD_NUMBER} .
-                '''
+                sh """
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                """
             }
         }
 
-        stage('Feature Branch Build Only') {
-
-            when {
-
-                expression {
-                    env.BRANCH_NAME.startsWith("feature/")
-                }
-            }
+        stage('Tag Docker Image') {
 
             steps {
 
-                echo "Feature branch detected"
-
+                sh """
+                docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
+                """
             }
         }
 
-        stage('Deploy to Dev') {
+        stage('Push Docker Image') {
+
+            steps {
+
+                sh """
+                docker push \
+                us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Deploy to GKE') {
 
             when {
 
@@ -56,22 +73,11 @@ pipeline {
 
             steps {
 
-                echo "Deploying to DEV environment"
+                sh """
+                sed -i 's|IMAGE_PLACEHOLDER|us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g' k8s/deployment.yaml
 
-            }
-        }
-
-        stage('Deploy to Production') {
-
-            when {
-
-                branch 'main'
-            }
-
-            steps {
-
-                echo "Deploying to PRODUCTION"
-
+                kubectl apply -f k8s/
+                """
             }
         }
     }
